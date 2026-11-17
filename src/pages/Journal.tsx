@@ -44,6 +44,15 @@ export function Journal() {
   const target = dashboard.data?.indexCards[0]?.targetSession ?? dashboard.data?.sectors[0]?.targetSession
   const open = target ? marketOpenKst(target) : null
   const locked = open ? Date.now() >= open.at.getTime() : true
+  const [, redraw] = useState(0)
+
+  // 마감 전에 열어 둔 화면도 마감 시각이 되면 잠근다
+  const openAt = open?.at.getTime()
+  useEffect(() => {
+    if (!openAt || Date.now() >= openAt) return
+    const timer = setTimeout(() => redraw((n) => n + 1), openAt - Date.now() + 500)
+    return () => clearTimeout(timer)
+  }, [openAt])
 
   // 종목을 치면 예상 범위를 옆에 보여준다
   useEffect(() => {
