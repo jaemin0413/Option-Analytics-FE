@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, tokens } from '../api'
 
 export function Login() {
-  const [email, setEmail] = useState('')
+  const joined = (useLocation().state as { joined?: string } | null)?.joined
+  const [params] = useSearchParams()
+  const [email, setEmail] = useState(joined ?? '')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -16,7 +18,9 @@ export function Login() {
     try {
       tokens.save(await api.login(email, password))
       localStorage.setItem('email', email)
-      navigate('/')
+      // 주소창에서 온 값이라 앱 안 경로('/'로 시작, '//' 아님)만 받는다
+      const next = params.get('next')
+      navigate(next?.startsWith('/') && !next.startsWith('//') ? next : '/')
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -26,12 +30,14 @@ export function Login() {
 
   return (
     <div className="auth">
+      <title>로그인 · Option</title>
       <div className="auth-inner">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <h1 style={{ fontSize: 34, lineHeight: 1.15 }}>Option</h1>
           <p className="sub" style={{ fontSize: 16 }}>장 전과 장 후, 하루 두 번 여는 옵션 참고 도구</p>
         </div>
         <form className="card" onSubmit={submit}>
+          {joined && <p role="status" className="muted">가입했습니다. 로그인해 주세요.</p>}
           <div className="field">
             <label htmlFor="login-email">이메일</label>
             <input id="login-email" className="input" type="email" autoComplete="email" placeholder="you@example.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -64,7 +70,7 @@ export function SignUp() {
     setError(null)
     try {
       await api.signUp(email, password)
-      navigate('/login')
+      navigate('/login', { state: { joined: email } })
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -74,6 +80,7 @@ export function SignUp() {
 
   return (
     <div className="auth">
+      <title>회원가입 · Option</title>
       <div className="auth-inner">
         <h1 style={{ fontSize: 28 }}>회원가입</h1>
         <form className="card" onSubmit={submit}>

@@ -7,6 +7,8 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
 
   useEffect(() => {
     let alive = true
+    // 이전 조건의 결과가 새 조건 화면에 남지 않게 비운다
+    setData(null)
     setError(null)
     load()
       .then((d) => { if (alive) setData(d) })

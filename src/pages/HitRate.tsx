@@ -81,7 +81,7 @@ function Table({ subjects, all, ex, head, meta }: {
 
 function Daily() {
   const [subject, setSubject] = useState(DIRECTION[0].id)
-  const { data } = useLoad(() => api.daily(subject), [subject])
+  const { data, error } = useLoad(() => api.daily(subject), [subject])
   const rows = (data ?? []).filter((r) => r.horizon === 'NEXT_DAY').sort((a, b) => b.targetSession.localeCompare(a.targetSession)).slice(0, 20)
 
   return (
@@ -103,6 +103,8 @@ function Daily() {
           </div>
         ))}
         {data && rows.length === 0 && <p className="muted" style={{ padding: '12px 0' }}>기록이 없습니다.</p>}
+        {error && <p className="err" style={{ padding: '12px 0' }}>{error}</p>}
+        {!data && !error && <p className="muted" style={{ padding: '12px 0' }}>불러오는 중</p>}
       </div>
     </section>
   )
@@ -122,6 +124,7 @@ export function HitRate() {
 
   return (
     <>
+      <title>검증 · Option</title>
       <section className="tip-host" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div className="row">
           <h1>검증</h1>
@@ -158,22 +161,24 @@ export function HitRate() {
       </section>
 
       {error && <p className="err">{error}</p>}
-      {!data && !error && <p className="muted">불러오는 중</p>}
+      {!data && !error && <p className="muted">불러오는 중 · 집계에 수십 초 걸릴 수 있습니다</p>}
 
-      {data && (
+        {/* 날짜별 표는 필터와 상관없어서 필터를 바꿔도 다시 부르지 않게 늘 붙여 둔다 */}
         <div className={ev === 'all' ? 'ev-all' : 'ev-ex'} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {tab === 'dir' && (
             <>
-              <section className="card tip-host" aria-label="방향 성적" style={{ paddingBottom: 4 }}>
-                <h2>방향 적중률</h2>
-                <Table subjects={DIRECTION} all={data.all} ex={data.excludingEvents} head={['대상', '신호 · 기권 · 결측']}
-                  meta={(r) => `신호 ${pct(r.signalRate)} · 기권 ${pct(r.abstainRate)} · 결측 ${pct(r.missingRate)}`} />
-              </section>
+              {data && (
+                <section className="card tip-host" aria-label="방향 성적" style={{ paddingBottom: 4 }}>
+                  <h2>방향 적중률</h2>
+                  <Table subjects={DIRECTION} all={data.all} ex={data.excludingEvents} head={['대상', '신호 · 기권 · 결측']}
+                    meta={(r) => `신호 ${pct(r.signalRate)} · 기권 ${pct(r.abstainRate)} · 결측 ${pct(r.missingRate)}`} />
+                </section>
+              )}
               <Daily />
             </>
           )}
 
-          {tab === 'range' && (
+          {data && tab === 'range' && (
             <section className="card tip-host" aria-label="범위 성적" style={{ paddingBottom: 4 }}>
               <div className="row">
                 <h2>범위 포함률</h2>
@@ -188,7 +193,7 @@ export function HitRate() {
             </section>
           )}
 
-          {tab === 'regime' && (
+          {data && tab === 'regime' && (
             <div className="grid-auto">
               <section className="card tip-host">
                 <div className="row">
@@ -239,7 +244,6 @@ export function HitRate() {
             </div>
           )}
         </div>
-      )}
     </>
   )
 }

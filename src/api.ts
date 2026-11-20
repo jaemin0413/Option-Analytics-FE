@@ -71,7 +71,12 @@ async function send<T>(method: string, path: string, body?: unknown): Promise<T>
   const access = tokens.access()
   if (access) headers.Authorization = `Bearer ${access}`
 
-  const res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
+  let res: Response
+  try {
+    res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
+  } catch {
+    throw new ApiError(0, undefined, '서버에 연결하지 못했습니다. 네트워크를 확인해 주세요.')
+  }
   const json = await res.json().catch(() => null)
   if (!res.ok) {
     const error = json?.error
@@ -86,13 +91,20 @@ let reissuing: Promise<boolean> | null = null
 async function reissue(): Promise<boolean> {
   const refreshToken = tokens.refresh()
   if (!refreshToken) return false
-  try {
-    tokens.save(await send('POST', '/api/auth/reissue', { refreshToken }))
-    return true
-  } catch {
-    tokens.clear()
-    return false
+  const run = async () => {
+    // 기다리는 동안 다른 탭이 먼저 다시 받았으면 그 토큰을 쓴다
+    if (tokens.refresh() !== refreshToken) return tokens.refresh() !== null
+    try {
+      tokens.save(await send('POST', '/api/auth/reissue', { refreshToken }))
+      return true
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 0) throw e
+      tokens.clear()
+      return false
+    }
   }
+  // 백엔드는 사용자당 리프레시 토큰 하나를 돌려 써서, 탭 둘이 동시에 다시 받으면 늦은 쪽이 실패한다
+  return navigator.locks ? navigator.locks.request('option-reissue', run) : run()
 }
 
 export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -102,7 +114,8 @@ export async function request<T>(method: string, path: string, body?: unknown): 
     if (!(e instanceof ApiError) || e.status !== 401) throw e
     reissuing ??= reissue().finally(() => { reissuing = null })
     if (!(await reissuing)) {
-      window.location.href = `${import.meta.env.BASE_URL}login`
+      const next = window.location.pathname.slice(import.meta.env.BASE_URL.length - 1) + window.location.search
+      window.location.href = `${import.meta.env.BASE_URL}login${next === '/' ? '' : `?next=${encodeURIComponent(next)}`}`
       throw e
     }
     return send<T>(method, path, body)

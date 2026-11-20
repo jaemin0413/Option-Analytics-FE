@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { api, tokens } from '../api'
 
@@ -19,10 +19,14 @@ function Search() {
 
   useEffect(() => {
     if (!key) return
+    // 늦게 온 이전 검색어 응답이 새 결과를 덮지 않게 한다
+    let alive = true
     const timer = setTimeout(() => {
-      api.search(key).then((r) => { setResults(r); setLoaded(key) }).catch(() => { setResults([]); setLoaded(key) })
+      api.search(key)
+        .then((r) => { if (alive) { setResults(r); setLoaded(key) } })
+        .catch(() => { if (alive) { setResults([]); setLoaded(key) } })
     }, 200)
-    return () => clearTimeout(timer)
+    return () => { alive = false; clearTimeout(timer) }
   }, [key])
 
   function go(symbol: string) {
@@ -31,7 +35,7 @@ function Search() {
   }
 
   return (
-    <form className="search" role="search" onSubmit={(e) => { e.preventDefault(); if (results[0]) go(results[0].symbol) }}>
+    <form className="search" role="search" onSubmit={(e) => { e.preventDefault(); if (loaded === key && results[0]) go(results[0].symbol) }}>
       <div className="search-box">
         <SearchIcon />
         <input type="search" aria-label="종목 검색" placeholder="종목 검색" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off" autoCapitalize="characters" />
@@ -65,6 +69,14 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate()
   // 토큰에 이메일이 없어서 로그인할 때 적어 둔 값을 보여준다
   const email = localStorage.getItem('email')
+  const ref = useRef<HTMLDivElement>(null)
+
+  // 열면 포커스를 시트 안으로, 닫으면 원래 자리로 돌려준다
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null
+    ref.current?.focus()
+    return () => prev?.focus()
+  }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -84,13 +96,14 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="sheet-bg" onClick={onClose}>
-      <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="acc-h" onClick={(e) => e.stopPropagation()}>
+      <div ref={ref} tabIndex={-1} className="sheet" role="dialog" aria-modal="true" aria-labelledby="acc-h" onClick={(e) => e.stopPropagation()}>
         <div aria-hidden="true" style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--line)', alignSelf: 'center' }} />
         <div>
           <h1 id="acc-h" style={{ fontSize: 22 }}>계정</h1>
           {email && <p className="sub" style={{ fontSize: 15 }}>{email}</p>}
         </div>
-        <button type="button" className="btn btn-weak" onClick={() => leave(api.logout)}>로그아웃</button>
+        {/* 서버 로그아웃이 실패해도 이 기기에서는 로그아웃한다 */}
+        <button type="button" className="btn btn-weak" onClick={() => leave(() => api.logout().catch(() => {}))}>로그아웃</button>
         <details>
           <summary>회원 탈퇴<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></summary>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 12 }}>
