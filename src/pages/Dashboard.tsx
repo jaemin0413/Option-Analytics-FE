@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { api, type EventItem, type Metric } from '../api'
 import { Tip } from '../components/Tip'
 import { useLoad } from '../useLoad'
-import { day, EVENT, gexBn, num, pct, REGIME, SECTOR_NAME, SENTIMENT, shortDay } from '../format'
+import { day, EVENT, gexBn, marketOpenKst, num, pct, REGIME, SECTOR_NAME, SENTIMENT, shortDay } from '../format'
 
 function kst(instant: string | null): string {
   if (!instant) return ''
@@ -47,19 +47,22 @@ function IndexCard({ m }: { m: Metric }) {
 
 export function Dashboard() {
   const { data, error } = useLoad(api.dashboard, [])
+  const title = <title>대시보드 · Option</title>
 
-  if (error) return <p className="err">{error}</p>
-  if (!data) return <p className="muted">불러오는 중</p>
-  if (!data.publication) return <p className="muted">아직 발표된 결과가 없습니다.</p>
+  if (error) return <>{title}<p className="err">{error}</p></>
+  if (!data) return <>{title}<p className="muted">불러오는 중</p></>
+  if (!data.publication) return <>{title}<p className="muted">아직 발표된 결과가 없습니다.</p></>
 
   const first = data.indexCards[0] ?? data.sectors[0]
   const sentiment = data.sentiment
   const missing = sentiment ? sentiment.components.filter((c) => !c.used).map((c) => SENTIMENT[c.name] ?? c.name) : []
   const events = groupEvents(data.events)
   const today = first?.targetSession
+  const opened = today ? Date.now() >= marketOpenKst(today).at.getTime() : false
 
   return (
     <>
+      {title}
       <section className="tip-host" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <div className="row">
           <h1>{day(today)} 장 전</h1>
@@ -70,6 +73,7 @@ export function Dashboard() {
           </Tip>
         </div>
         {first && <div className="sub">가격 기준 {day(first.baseSession)} 종가 · OI 기준 {day(first.oiAsOfDate)}</div>}
+        {opened && <div className="warn" style={{ fontSize: 14 }}>이 세션은 이미 열렸습니다. 다음 발표 전까지 같은 내용이 보입니다.</div>}
       </section>
 
       <section className="tip-host" aria-labelledby="idx-h" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

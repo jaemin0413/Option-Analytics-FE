@@ -40,6 +40,8 @@ export function Journal() {
   const [metric, setMetric] = useState<Metric | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [restored, setRestored] = useState(false)
 
   const target = dashboard.data?.indexCards[0]?.targetSession ?? dashboard.data?.sectors[0]?.targetSession
   const open = target ? marketOpenKst(target) : null
@@ -65,11 +67,27 @@ export function Journal() {
     return () => clearTimeout(timer)
   }, [symbol])
 
+  // 오늘 이미 저장한 종목이면 그 판단을 폼에 불러온다. 모르고 보류로 덮어쓰지 않게
+  useEffect(() => {
+    const j = journals.data?.find((x) => x.symbol === symbol.trim() && x.targetSession === target)
+    if (!j) return
+    setDirection(j.direction)
+    setMemo(j.memo ?? '')
+    setRestored(true)
+  }, [symbol, target, journals.data])
+
+  // 폼을 고치면 이전 안내는 지운다
+  function changed() {
+    setSaved(false)
+    setRestored(false)
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault()
     if (!target) return
     setError(null)
     setSaved(false)
+    setBusy(true)
     try {
       const entry = await api.saveJournal({ symbol: symbol.trim().toUpperCase(), targetSession: target, direction, memo })
       const others = (journals.data ?? []).filter((j) => !(j.symbol === entry.symbol && j.targetSession === entry.targetSession))
@@ -77,10 +95,13 @@ export function Journal() {
       setSaved(true)
     } catch (err) {
       setError((err as Error).message)
+    } finally {
+      setBusy(false)
     }
   }
 
   function edit(j: JournalEntry) {
+    changed()
     setSymbol(j.symbol)
     setDirection(j.direction)
     setMemo(j.memo ?? '')
@@ -92,6 +113,7 @@ export function Journal() {
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16, alignItems: 'start' }}>
+      <title>저널 · Option</title>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <form className="card tip-host" style={{ gap: 16 }} onSubmit={submit}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -106,12 +128,14 @@ export function Journal() {
               </Tip>
             </div>
             <div className="sub">{target ? `${day(target)} 거래일 · ${open?.label} KST ${locked ? '마감됨' : '마감'}` : '발표된 거래일이 없습니다'}</div>
+            {target && locked && <div className="muted">이 거래일 기록은 마감됐습니다. 다음 발표가 나오면 새 거래일로 다시 열립니다.</div>}
           </div>
+          {dashboard.error && <p className="err">{dashboard.error}</p>}
 
           <div className="field">
             <label htmlFor="j-symbol" style={{ fontSize: 15 }}>종목</label>
-            <input id="j-symbol" className="input" style={{ fontSize: 18, fontWeight: 700 }} type="text" required maxLength={16} autoComplete="off" autoCapitalize="characters"
-              value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} />
+            <input id="j-symbol" className="input" style={{ fontSize: 18, fontWeight: 700 }} type="text" required maxLength={16} autoComplete="off" autoCapitalize="characters" disabled={locked}
+              value={symbol} onChange={(e) => { setSymbol(e.target.value.toUpperCase()); changed() }} />
             {metric && (
               <Link to={`/ticker/${metric.symbol}`} style={{ alignSelf: 'flex-start', minHeight: 44, display: 'flex', alignItems: 'center', fontSize: 14, fontWeight: 600 }}>
                 예상 범위 ${num(metric.dayRange.low)} – {num(metric.dayRange.high)} · 분석 보기
@@ -125,8 +149,8 @@ export function Journal() {
               {DIRS.map((d) => {
                 const on = d.id === direction
                 return (
-                  <button key={d.id} type="button" aria-pressed={on} onClick={() => setDirection(d.id)}
-                    style={{ minHeight: 56, borderRadius: 10, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: on ? 'var(--blue-weak)' : 'var(--line)', border: `2px solid ${on ? 'var(--blue)' : 'var(--line)'}` }}>
+                  <button key={d.id} type="button" aria-pressed={on} disabled={locked} onClick={() => { setDirection(d.id); changed() }}
+                    style={{ minHeight: 56, borderRadius: 10, cursor: locked ? 'default' : 'pointer', opacity: locked ? 0.5 : 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: on ? 'var(--blue-weak)' : 'var(--line)', border: `2px solid ${on ? 'var(--blue)' : 'var(--line)'}` }}>
                     <span className={d.className} style={{ fontSize: 16, fontWeight: 700 }}>{d.label}</span>
                     <span className="small">{d.sub}</span>
                   </button>
@@ -137,11 +161,13 @@ export function Journal() {
 
           <div className="field">
             <label htmlFor="j-memo" style={{ fontSize: 15 }}>한 줄 메모</label>
-            <textarea id="j-memo" className="input" maxLength={500} rows={3} value={memo} onChange={(e) => setMemo(e.target.value)} />
+            <textarea id="j-memo" className="input" maxLength={500} rows={3} disabled={locked} value={memo} onChange={(e) => { setMemo(e.target.value); changed() }} />
           </div>
           {error && <p className="err" role="alert">{error}</p>}
           {saved && <p role="status" className="muted">저장했습니다.</p>}
-          <button type="submit" className="btn" disabled={locked || !symbol.trim()}>{locked ? '마감됨' : '저장'}</button>
+          {/* 저장 직후 목록이 바뀌어 다시 불러와도 '저장했습니다'만 보이게 한다 */}
+          {restored && !saved && <p role="status" className="muted">저장해 둔 판단을 불러왔습니다.</p>}
+          <button type="submit" className="btn" disabled={locked || busy || !symbol.trim()}>{locked ? '마감됨' : '저장'}</button>
         </form>
 
         {todays.length > 0 && (

@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { tokens } from './api'
 import { Layout } from './components/Layout'
@@ -10,7 +10,9 @@ import { Ticker } from './pages/Ticker'
 
 // 로그인 안 했으면 로그인 화면으로. 토큰이 만료됐는지는 API가 401로 알려준다
 function RequireLogin({ children }: { children: ReactNode }) {
-  return tokens.access() ? children : <Navigate to="/login" replace />
+  const { pathname, search } = useLocation()
+  const next = pathname + search
+  return tokens.access() ? children : <Navigate to={next === '/' ? '/login' : `/login?next=${encodeURIComponent(next)}`} replace />
 }
 
 export default function App() {

@@ -115,16 +115,26 @@ export function Ticker() {
   const { data, error } = useLoad(() => api.ticker(symbol), [symbol])
   const [tab, setTab] = useState<'day' | 'week'>('day')
 
-  if (error) return <p className="err">{error}</p>
-  if (!data) return <p className="muted">불러오는 중</p>
+  const title = <title>{`${symbol.toUpperCase()} · Option`}</title>
+
+  if (error) return (
+    <>
+      {title}
+      <h1>{symbol.toUpperCase()}</h1>
+      <p className="err">{error}</p>
+      <Link to="/" style={{ alignSelf: 'flex-start', minHeight: 44, display: 'flex', alignItems: 'center', fontWeight: 600 }}>대시보드로</Link>
+    </>
+  )
+  if (!data) return <>{title}<p className="muted">불러오는 중</p></>
   const m = data.metric
-  if (!m) return <><h1>{symbol.toUpperCase()}</h1><p className="muted">이 종목은 이번 발표에 결과가 없습니다.</p></>
+  if (!m) return <>{title}<h1>{symbol.toUpperCase()}</h1><p className="muted">이 종목은 이번 발표에 결과가 없습니다.</p></>
 
   const range = tab === 'day' ? m.dayRange : m.weekRange
   const hypotheses = [...new Set(data.signals.map((s) => s.hypothesis))]
 
   return (
     <>
+      {title}
       <section className="tip-host" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div className="row" style={{ gap: 12, flexWrap: 'nowrap' }}>
           <div className="row" style={{ alignItems: 'baseline', gap: 10, flex: 1, minWidth: 0 }}>
